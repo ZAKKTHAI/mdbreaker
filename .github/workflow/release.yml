@@ -2,60 +2,64 @@ name: Release AppImage
 
 on:
   push:
-    # "v1.0.0" のようなバージョンタグ（tag）がコミットされた時に自動実行する設定
     tags:
       - 'v*'
-  # GitHubの画面から手動で実行したい場合もオンにする設定
-  workflow_dispatch:
 
 jobs:
-  release:
+  build:
     permissions:
-      contents: write # GitHub Releasesを作成・編集するために必須の権限
-    runs-on: ubuntu-latest
+      contents: write
+    runs-on: ubuntu-22.04
 
     steps:
-      # 1. ソースコードのチェックアウト
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. Node.js 環境のセットアップ (フロントエンド用)
       - name: Setup Node.js
-        uses: actions/abstract-javascript/setup-node@v2 # または actions/setup-node@v4
+        uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: '20'
 
-      # 3. Rust 環境のセットアップ (Tauriコア用)
-      - name: Setup Rust toolchain
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # 4. Linux(Ubuntu) で Tauri をビルドするために必要なシステム依存ライブラリのインストール
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key:  runner.os -cargo-{{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            \${{ runner.os }}-cargo-
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            patchelf
 
-      # 5. フロントエンドのパッケージインストール (npm の例。pnpm や yarn なら適宜変更)
       - name: Install frontend dependencies
-        run: npm install
+        run: pnpm install
 
-      # 6. Tauri公式のActionを使い、ビルドからGitHub Releaseへのアップロードまでを自動化
-      - name: Build and Release AppImage
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 権限用トークン (自動で適用されます)
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }} # タグ名をリリース名にする
-          releaseName: 'AppImage Release ${{ github.ref_name }}'
-          releaseBody: 'Tauriで自動ビルドされた Linux 用 AppImage です。'
-          releaseDraft: true # 最初は「下書き(Draft)」として保存されるので安心です
+          tagName: \${{ github.ref_name }}
+          releaseName: 'AppImage Release \${{ github.ref_name }}'
+          releaseBody: |
+            ## ダウンロード
+            - Linux: `.AppImage` ファイル
+          releaseDraft: true
           prerelease: false
