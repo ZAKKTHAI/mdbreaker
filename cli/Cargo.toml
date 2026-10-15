@@ -1,0 +1,20 @@
+
+
+[package]
+name = "mdbreaker-core"
+version = "0.1.0"
+edition = "2024"
+
+
+[lib]
+name = "mdbreaker_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mdbreaker"
+path = "src/main.rs"
+
+[dependencies]
+pulldown-cmark = "0.13.4"
+serde = { version = "1", features = ["derive"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
