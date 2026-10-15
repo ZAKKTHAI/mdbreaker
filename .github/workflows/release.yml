@@ -1,4 +1,5 @@
-name: Release AppImage
+# .github/workflows/release.yml
+name: Release
 
 on:
   push:
@@ -7,9 +8,16 @@ on:
 
 jobs:
   build:
-    permissions:
-      contents: write
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -26,20 +34,11 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo
-        uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key:  runner.os -cargo-{{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            \${{ runner.os }}-cargo-
+          targets: ${{ matrix.target }}
 
       - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -48,15 +47,22 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      - name: Install frontend dependencies
+        run: pnpm install
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN  }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'AppImage Release ${{ github.ref_name }}'
+          releaseName: 'MarkWeave ${{ github.ref_name }}'
           releaseBody: |
             ## ダウンロード
+            - Windows: `.msi` ファイル
             - Linux: `.AppImage` ファイル
-          releaseDraft: true
+
+            ## 変更内容
+            CHANGELOG.md を参照してください。
+          releaseDraft: false
           prerelease: false
